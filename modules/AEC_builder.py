@@ -5,6 +5,7 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras.models import Model
 import tensorflow.keras.backend as K
 from tensorflow.keras import regularizers
+import numpy as np
 
 def act_function(input, selection):
     if selection == 'ReLU':
@@ -13,10 +14,9 @@ def act_function(input, selection):
         f = PReLU()(input)
     return f
 
-def check_shape(layer, nb_layer, conv_kernel, conv_stride, pool_kernel, pool_stride):
+def check_shape(layer, nb_layer, conv_kernel, conv_stride, pool_kernel, pool_stride, padding):
     shape = layer.shape
     shape_idx = 1, 2
-    p = 0 # padding = 0
     
     for i, idx in enumerate(shape_idx):
         # row, column에 대한 반복
@@ -24,11 +24,17 @@ def check_shape(layer, nb_layer, conv_kernel, conv_stride, pool_kernel, pool_str
         iter = nb_layer
         
         while iter > 0: # number of layer 만큼 반복
-            # convolutional output shape
-            temp_shape = int(temp_shape + p - conv_kernel[i])/conv_stride[i] + 1
-            
-            # pooling output shape
-            temp_shape = int(temp_shape + p - pool_kernel[i])/pool_stride[i] + 1
+            if padding == 'valid':
+                # convolutional output shape
+                temp_shape = np.ceil(float(temp_shape - conv_kernel[i] + 1) / float(conv_stride[i]))
+                # pooling output shape
+                temp_shape = np.ceil(float(temp_shape - pool_kernel[i] + 1) / float(pool_stride[i]))
+                
+            elif padding == 'same':
+                # convolutional output shape
+                temp_shape = np.ceil(float(temp_shape) / float(conv_stride[i]))
+                # pooling output shape
+                temp_shape = np.ceil(float(temp_shape) / float(pool_stride[i]))
             
             if temp_shape < 1:
                 return False
@@ -65,7 +71,7 @@ class build_functions():
                 
             input_img = BatchNormalization()(input_img)
             input_img = act_function(input=input_img, selection=conv_params['act_selection'])
-            input_img = MaxPooling2D(pool_size=conv_params['pool_size'], strides=conv_params['pool_strides'])(input_img)    
+            input_img = MaxPooling2D(pool_size=conv_params['pool_size'], strides=conv_params['pool_strides'], padding=conv_params['padding'])(input_img)    
             return input_img
         return f
 
@@ -83,7 +89,7 @@ class Encoder():
         
         self.input_shape = params.setdefault('input_shape', (2000,16,1))
         self.kernel_size = params.setdefault('kernel_size', (10,3))
-        self.strides = params.setdefault('strides', (2,1))
+        self.strides = params.setdefault('strides', (2,2))
         self.padding = params.setdefault('padding', 'valid')
         self.act_selection = params.setdefault('act_selection', 'ReLU')
         self.pool_size = params.setdefault('pool_size', (5,3))
@@ -94,14 +100,15 @@ class Encoder():
         self.error_shape = False
         if not(check_shape(layer=self.input_img, nb_layer=self.nb_layer, 
                            conv_kernel=self.kernel_size, conv_stride=self.strides,
-                           pool_kernel=self.pool_size, pool_stride=self.pool_strides)):
+                           pool_kernel=self.pool_size, pool_stride=self.pool_strides,
+                           padding=self.padding)):
             print('Consider the resulting shape !')
             self.error_shape = True
             return
         
         conv = self.input_img
         for i in range(self.nb_layer):
-            nb_filter = (i+1)*4
+            nb_filter = 4**(i+1)
             conv = build_functions._conv_bn_relu_pool(nb_filter = nb_filter,
                                                       is_first_layer = (i==0),
                                                       input_shape = self.input_shape,
@@ -162,7 +169,11 @@ class BottleNeck():
         self.decoder = Model(inputs=self._encoder.input, outputs=decoder)
 
 class Decoder_Upsampling():
-    pass
+    def __init__(self) -> None:
+        pass
+    
+    def build(self):
+        pass
 
 class Decoder_Deconv():
     pass
