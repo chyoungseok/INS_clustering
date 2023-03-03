@@ -134,11 +134,32 @@ class BottleNeck():
             embedding = BatchNormalization()(embedding)
             embedding = act_function(input=embedding, selection=self.act_selection)
             embedding = Dense(units=self.vector_len, name='embedding')(embedding)
+            
+            decoder = embedding
+            decoder = Dense(units=self._encoder_shape[1]*self._encoder_shape[2]*self._encoder_shape[3])(decoder)
+            decoder = Reshape((self._encoder_shape[1], self._encoder_shape[2], self._encoder_shape[3]))(decoder)
+            decoder = BatchNormalization()(decoder)
+            decoder = act_function(input=decoder, selection=self.act_selection)
+
+            
         elif self.use_DENSE_OR_GAP == 'GAP':
-            embedding = Dense(units=self.vector_len, name='embedding')(embedding)
-            embedding = GlobalAveragePooling2D()(embedding)
+            embedding = Dense(units=self.vector_len)(embedding)
+            embedding = GlobalAveragePooling2D(name='embedding')(embedding)
+            
+            decoder = embedding
+            decoder = Dense(units=self._encoder_shape[1]*self._encoder_shape[2]*self.vector_len)(decoder)
+            decoder = Reshape((self._encoder_shape[1], self._encoder_shape[2], self.vector_len))(decoder)
+            decoder = BatchNormalization()(decoder)
+            decoder = act_function(input=decoder, selection=self.act_selection)
+            
+            decoder = Dense(units=self._encoder_shape[3])(decoder)
+            decoder = Reshape((self._encoder_shape[1], self._encoder_shape[2], self._encoder_shape[3]))(decoder)
+            decoder = BatchNormalization()(decoder)
+            decoder = act_function(input=decoder, selection=self.act_selection)            
+            
         
         self.model = Model(inputs=self._encoder.input, outputs=embedding)
+        self.decoder = Model(inputs=self._encoder.input, outputs=decoder)
 
 class Decoder_Upsampling():
     pass
