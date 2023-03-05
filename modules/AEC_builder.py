@@ -75,6 +75,43 @@ class build_functions():
             return input_img
         return f
 
+    @staticmethod
+    def _conv_bn_relu_upsample(**conv_params):
+        '''
+        - create a layer consisting of COnv2D + BatchNormalization + ReLU(or PReLU) + UpSampling2D
+        - usage
+          _conv_upsample_layer = _conv_bn_relut_upsample(params)(input)
+        '''
+        weight_decay = 0.0005
+        
+        def f(input_img):
+            input_img = Conv2D(filters=conv_params['nb_filter'],
+                            kernel_size=conv_params['kernel_size'],
+                            strides=conv_params['strides'],
+                            kernel_regularizer=regularizers.l2(l=weight_decay),
+                            padding=conv_params['padding'])(input_img)
+
+            input_img = BatchNormalization()(input_img)
+            input_img = act_function(input=input_img, selection=conv_params['act_selection'])
+            input_img = UpSampling2D(size=conv_params['pool_size'])(input_img)
+            return input_img
+        return f
+
+    @staticmethod
+    def _deconv_bn_relu(**conv_params):
+        weight_decay = 0.0005
+        
+        def f(input_img):
+            input_img = Conv2DTranspose(filters=conv_params['nb_filter'],
+                                        kernel_size=conv_params['kernel_size'],
+                                        strides=conv_params['strides'],
+                                        kernel_regularizer=regularizers.l2(l=weight_decay),
+                                        padding=conv_params['padding'])(input_img)
+            input_img = BatchNormalization()(input_img)
+            input_img = act_function(input=input_img, selection=conv_params['act_selection'])
+            return input_img
+        return f
+
 
 class Encoder():
     def __init__(self, **params):
@@ -89,11 +126,11 @@ class Encoder():
         
         self.input_shape = params.setdefault('input_shape', (2000,16,1))
         self.kernel_size = params.setdefault('kernel_size', (10,3))
-        self.strides = params.setdefault('strides', (2,2))
+        self.strides = params.setdefault('strides', (1,1))
         self.padding = params.setdefault('padding', 'valid')
         self.act_selection = params.setdefault('act_selection', 'ReLU')
         self.pool_size = params.setdefault('pool_size', (5,3))
-        self.pool_strides = params.setdefault('pool_strides', (2,1))            
+        self.pool_strides = params.setdefault('pool_strides', (2,2))            
         
     def build(self):
         # input이 layer를 통과 했을 때, 연산 결과, shape 차원에서 오류가 발생하지 않는지 확인
@@ -168,12 +205,39 @@ class BottleNeck():
         self.model = Model(inputs=self._encoder.input, outputs=embedding)
         self.decoder = Model(inputs=self._encoder.input, outputs=decoder)
 
-class Decoder_Upsampling():
-    def __init__(self) -> None:
-        pass
+class Decoder():
+    def __init__(self, **params):
+        self._bottleneck = params['_bottleneck'] # model of bottleneck (as decoder)\
+        self.use_UPSAMPLE_OR_DECONV = params['use_UPSAMPLE_OR_DECONV']
+
+        self.nb_layer = params.setdefault('nb_layer', 3)
+        self.kernel_size = params.setdefault('kernel_size', (10,3))
+        self.strides = params.setdefault('strides', (1,1))
+        self.padding = params.setdefault('padding', 'valid')
+        self.act_selection = params.setdefault('act_selection', 'ReLU')
+        self.pool_size = params.setdefault('pool_size', (2,2)) # for Upsampling
+    
     
     def build(self):
-        pass
+        decoder = self._bottleneck.output
+        
+        for i in range(self.nb_layer):
+            nb_filter = (4**self.nb_layer)/(4**(i+1))
+            if self.use_UPSAMPLE_OR_DECONV == 'UPSAMPLE':
+                decoder = build_functions._conv_bn_relu_upsample(nb_filter = nb_filter,
+                                                                kernel_size = self.kernel_size,
+                                                                strides = self.strides,
+                                                                padding = self.padding,
+                                                                act_selection = self.act_selection,
+                                                                pool_size = self.pool_size
+                                                                )(decoder)
+            elif self.use_UPSAMPLE_OR_DECONV == 'DECONV':
+                decoder = build_functions._deconv_bn_relu(nb_filter = nb_filter,
+                                                        kernel_size = self.kernel_size,
+                                                        strides = self.strides,
+                                                        padding = self.padding,
+                                                        act_selection = self.act_selection
+                                                        )(decoder)
+        
+        self.model = Model(inputs=self._bottleneck.input, outputs=decoder)
 
-class Decoder_Deconv():
-    pass

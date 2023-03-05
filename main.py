@@ -1,8 +1,6 @@
 import os, argparse
 from modules.utils import str2bool
 
-
-
 def parse_minimal_args(parser):
     parser.add_argument("--gpu_num", type=str, default='0')
     parser.add_argument("--model_selection", type=str, default='upsampling') # 'upsampling', 'deconv'
@@ -44,5 +42,6 @@ if __name__ == '__main__':
     # GPU selection
     os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu_num
+    
     
     
