@@ -1,4 +1,4 @@
-_pycache_/
+__pycache__/
 csv_files/
 
 results/*/*.h5
