@@ -1,7 +1,7 @@
 import os, argparse
 from modules.utils import str2bool, append_default_path, get_ExperimentInfo
 from modules.model_utils import get_model_with_experiment_info, model_initiation, train_model, eval_model
-from modules import load
+from modules import load, AEC_builder
 
 class main:
     '''
@@ -28,6 +28,8 @@ class main:
         self.learning_rate = params['learning_rate']
         self.epochs = params['epochs']
         self.batch_size = params['batch_size']
+        self.sheet_name = params['sheet_name']
+        self.model_selection = params['model_selection']
         
         # 1. Load data (scalograms)
         print("\n---------Load Data---------")
@@ -36,7 +38,7 @@ class main:
 
         # 2. Read experiment info
         print("\n---------Read Experiment Info---------")
-        df_experiment = get_ExperimentInfo()
+        df_experiment = get_ExperimentInfo(sheet_name=self.sheet_name)
         print("%d experiments will be implemented\n" % len(df_experiment))
 
         self._load = _load
@@ -45,12 +47,19 @@ class main:
     def run(self):
         for i in range(len(self.df_experiment)):
             temp_experiment = self.df_experiment.loc[i+1, :]
-            model = get_model_with_experiment_info(temp_experiment=temp_experiment)
+
+            if self.model_selection == 'v05':
+                model = AEC_builder.ConvolutionalAutoencoder_v05(vector_len=temp_experiment['vector_len'])
+            elif self.model_selection == 'v06':
+                model = AEC_builder.ConvolutionalAutoencoder_v06(vector_len=temp_experiment['vector_len'])
+            else:
+                model = get_model_with_experiment_info(temp_experiment=temp_experiment)
             model = model_initiation(model=model, is_lr_reducer=self.is_lr_reducer, learning_rate=self.learning_rate)
             
             train_model(X_train=self._load.train_data,
                         X_val=self._load.test_data,
-                        test_name=str(i+1),
+                        test_name=self.sheet_name,
+                        iter=i+1,
                         is_lr_reducer=self.is_lr_reducer,
                         model=model,
                         epochs=self.epochs,
@@ -58,7 +67,8 @@ class main:
 
             eval_model(X_train=self._load.train_data,
                        X_test=self._load.test_data,
-                       test_name=str(i+1))
+                       test_name=self.sheet_name,
+                       iter=i+1)
             
             
 def parse_minimal_args(parser):
@@ -67,6 +77,8 @@ def parse_minimal_args(parser):
     parser.add_argument("--epochs", type=int, default=50) # number of training epochs
     parser.add_argument("--learning_rate", type=float, default=0.01) # laerning rate for training
     parser.add_argument("--batch_size", type=int, default=32) # batch size for training
+    parser.add_argument("--sheet_name", type=str, default='sheet_1') 
+    parser.add_argument("--model_selection", type=str, default='v05') 
     return parser
 
 def print_args(args):
@@ -76,6 +88,8 @@ def print_args(args):
     print("  | epochs: %d" % (args.epochs))
     print("  | learning_rate: %f" % (args.learning_rate))
     print("  | batch_size: %d" % (args.batch_size))
+    print("  | sheet_name: %s" % (args.sheet_name))
+    print("  | model_selection: %s" % (args.model_selection))
     print("  -------------------------------")
     pass
 
@@ -96,7 +110,9 @@ if __name__ == '__main__':
     _main = main(is_lr_reducer=args.is_lr_reducer,
                 epochs=args.epochs,
                 learning_rate=args.learning_rate,
-                batch_size=args.batch_size)
+                batch_size=args.batch_size,
+                sheet_name=args.sheet_name,
+                model_selection=args.model_selection)
     
     _main.run()
 

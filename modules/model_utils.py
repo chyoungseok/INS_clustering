@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 
 import matplotlib.pyplot as plt
 
@@ -12,6 +13,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.utils import get_custom_objects
 
 from modules import AEC_builder
+from modules import utils
 
 temp_path = os.getcwd().split('Deep_clustering_v02')[0]
 temp_path = os.path.join(temp_path, 'Deep_clustering_v02')  
@@ -71,6 +73,16 @@ def custom_corr(X_true, X_pred):
         
     return np.mean(corr_train)
 
+def get_corr_statistics(X_true, X_pred):
+    corr_train = []
+    for i in range(len(X_true)):
+        temp_corr = np.corrcoef(X_true[i].squeeze().flatten(), 
+                                X_pred[i].squeeze().flatten())[0,1]
+        corr_train.append(temp_corr)
+
+    return np.mean(corr_train), np.median(corr_train), np.std(corr_train)
+
+
 def corr_keras(X_true, X_pred):
     corr = tf.py_function(func=custom_corr, inp=[X_true, X_pred], Tout=tf.float32, name='corr')
     return corr
@@ -96,9 +108,9 @@ def model_initiation(model, is_lr_reducer, learning_rate):
     return model
     
     
-def train_model(X_train, X_val, test_name, is_lr_reducer, model, epochs, batch_size):  
+def train_model(X_train, X_val, test_name, iter, is_lr_reducer, model, epochs, batch_size):  
     # callback_1
-    path_weights = '%s/results/%s/weights.h5' % (temp_path, test_name)
+    path_weights = '%s/results/%s/%d/weights.h5' % (temp_path, test_name, iter)
     checkpoint = ModelCheckpoint(path_weights, monitor='val_loss', save_best_only=True, verbose=False, mode='min')
     callbacks = [checkpoint]
 
@@ -111,26 +123,37 @@ def train_model(X_train, X_val, test_name, is_lr_reducer, model, epochs, batch_s
     H = model.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=epochs, callbacks=callbacks, batch_size=batch_size)
     
     # Plot acc_loss_plot and Save the result
-    plot_acc_loss(H=H, path_save='%s/results/%s/acc_loss_plot.png' % (temp_path, test_name), epochs=epochs, test_name=test_name)
+    plot_acc_loss(H=H, path_save='%s/results/%s/%d/acc_loss_plot.png' % (temp_path, test_name, iter), epochs=epochs, test_name=test_name)
     return model
 
 
-
-def eval_model(X_train, X_test, test_name):    
-    model = load_model('%s/results/%s/weights.h5' % (temp_path, test_name))
+def eval_model(X_train, X_test, test_name, iter):    
+    path_module, path_csv, path_scalogram = utils.append_default_path()
+    model = load_model('%s/results/%s/%d/weights.h5' % (temp_path, test_name, iter))
     
-    # 1. test MSE
+    if iter == 1:
+        df = pd.DataFrame(index=[iter], columns=['mean_corr', 'median_corr', 'std_corr'])
+    else:
+        df = pd.read_excel(os.path.join(path_csv, 'results.xlsx'), sheet_name=test_name, index_col=0)
+
+    # 1. test corr
     X_test_pred = model.predict(X_test)
     corr = custom_corr(X_test, X_test_pred)
     print("\ncorr of test set: {}".format(corr))
+    mean_corr, median_corr, std_corr = get_corr_statistics(X_test, X_test_pred)
+    df.loc[iter, :] = [mean_corr, median_corr, std_corr]
+    with pd.ExcelWriter(os.path.join(path_csv, 'results.xlsx'), mode='a', if_sheet_exists='replace', engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name=test_name)
+
+    # df.to_excel(excel_writer=os.path.join(path_csv, 'results.xlsx'), sheet_name=test_name)
     
     # 2. Compare the image of input and output
     #       - two samples from both train and test data, respectively
     X_train_pred = model.predict(X_train)
     num_samples = 5
-    save_path = os.path.join(temp_path, 'results', test_name, 'train example.png')
+    save_path = os.path.join(temp_path, 'results', test_name, str(iter), 'train example.png')
     f = plot_i_o_compare(X_train[0:num_samples], X_train_pred[0:num_samples], save_path=save_path)
-    save_path = os.path.join(temp_path, 'results', test_name, 'test example.png')
+    save_path = os.path.join(temp_path, 'results', test_name, str(iter), 'test example.png')
     f = plot_i_o_compare(X_test[0:num_samples], X_test_pred[0:num_samples], save_path)
 
 

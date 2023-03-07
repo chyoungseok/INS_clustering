@@ -1,8 +1,8 @@
 from tensorflow.keras.layers import Input, add, Add, Reshape
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, UpSampling2D, GlobalAveragePooling2D
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Conv2DTranspose, UpSampling2D, GlobalAveragePooling2D, MaxPool2D
 from tensorflow.keras.layers import PReLU, BatchNormalization, Flatten, Dense, ReLU
 from tensorflow.keras.regularizers import l2
-from tensorflow.keras.models import Model
+from tensorflow.keras.models import Model, Sequential
 import tensorflow.keras.backend as K
 from tensorflow.keras import regularizers
 import numpy as np
@@ -144,7 +144,7 @@ class Encoder():
             return
         
         conv = self.input_img
-        nb_filter = 4
+        nb_filter = 8
         for i in range(self.nb_layer):
             conv = build_functions._conv_bn_relu_pool(nb_filter = nb_filter,
                                                       is_first_layer = (i==0),
@@ -156,7 +156,7 @@ class Encoder():
                                                       pool_size = self.pool_size,
                                                       pool_strides=self.pool_strides
                                                       )(conv)              
-            nb_filter += 4
+            nb_filter *= 2
         model = Model(inputs=self.input_img, outputs=conv)
         self.model = model       
 
@@ -241,3 +241,100 @@ class Decoder():
         
         self.model = Model(inputs=self._bottleneck.input, outputs=decoder)
 
+def ConvolutionalAutoencoder_v05(vector_len=30):
+    weight_decay=0.0005
+
+    model = Sequential()
+    model.add(Conv2D(filters=24,
+                        input_shape=(2000, 16, 1),
+                        kernel_size=(10, 2),
+                        strides=(1, 1),
+                        kernel_regularizer=regularizers.l2(l=weight_decay),
+                        padding='valid', name="Conv1"))
+    model.add(BatchNormalization(name="BN1"))
+    model.add(PReLU(name="PReLU1"))
+
+    model.add(Conv2D(filters=48,
+                        kernel_size=(10, 2),
+                        strides=(2, 1),
+                        kernel_regularizer=regularizers.l2(l=weight_decay),
+                        padding='valid', name="Conv2"))
+    model.add(BatchNormalization(name="BN2"))
+    model.add(PReLU(name="PReLU2"))
+
+    model.add(MaxPool2D(pool_size=(5, 2),
+                        strides=(2, 1), name="Pool1"))
+
+    model.add(Flatten())
+    model.add(Dense(units=vector_len, name='embedding'))
+
+    model.add(Dense(units=494*14*48, activation='relu'))
+
+    model.add(Reshape((494,14,48)))
+
+    model.add(Conv2DTranspose(filters=24,
+                                kernel_size=(10, 2),
+                                kernel_regularizer=regularizers.l2(
+                                    l=weight_decay),
+                                strides=(2, 1), name="Deconv1", padding='valid'))
+    model.add(BatchNormalization(name="BN3"))
+    model.add(PReLU(name="PReLU3"))
+    model.add(Conv2DTranspose(filters=1,
+                                kernel_size=(10, 2),
+                                kernel_regularizer=regularizers.l2(
+                                    l=weight_decay),
+                                strides=(2, 1), name="Deconv2", padding='valid'))
+    model.add(BatchNormalization(name="BN4"))
+    
+    return model
+
+
+def ConvolutionalAutoencoder_v06(vector_len=30):
+    weight_decay=0.0005
+    padding = 'same'
+
+    model = Sequential()
+    model.add(Conv2D(filters=24,
+                        input_shape=(2000, 16, 1),
+                        kernel_size=(10, 2),
+                        strides=(1, 1),
+                        kernel_regularizer=regularizers.l2(l=weight_decay),
+                        padding=padding, name="Conv1"))
+    model.add(BatchNormalization(name="BN1"))
+    model.add(PReLU(name="PReLU1"))
+
+    model.add(Conv2D(filters=48,
+                        kernel_size=(10, 2),
+                        strides=(2, 2),
+                        kernel_regularizer=regularizers.l2(l=weight_decay),
+                        padding=padding, name="Conv2"))
+    model.add(BatchNormalization(name="BN2"))
+    model.add(PReLU(name="PReLU2"))
+
+    model.add(MaxPool2D(pool_size=(5, 2),
+                        strides=(2, 2), name="Pool1", padding=padding))
+
+    model.add(Flatten())
+    model.add(Dense(units=vector_len, name='embedding'))
+
+    model.add(Dense(units=500*4*48, activation='relu'))
+
+    model.add(Reshape((500,4,48)))
+
+    model.add(UpSampling2D(size=(2,2)))
+
+    model.add(Conv2DTranspose(filters=24,
+                                kernel_size=(10, 2),
+                                kernel_regularizer=regularizers.l2(
+                                    l=weight_decay),
+                                strides=(2, 2), name="Deconv1", padding=padding))
+    model.add(BatchNormalization(name="BN3"))
+    model.add(PReLU(name="PReLU3"))
+    model.add(Conv2DTranspose(filters=1,
+                                kernel_size=(10, 2),
+                                kernel_regularizer=regularizers.l2(
+                                    l=weight_decay),
+                                strides=(1, 1), name="Deconv2", padding=padding))
+    model.add(BatchNormalization(name="BN4"))
+    
+    return model
