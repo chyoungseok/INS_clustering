@@ -121,7 +121,7 @@ class Encoder():
          - nb_layer: number of convolutional-hidden layers
         '''
         self.params = params
-        self.input_img = Input(shape=params['input_shape'])
+        self.input_img = Input(shape=params.setdefault('input_shape', (2000,16,1)))
         self.nb_layer = params.setdefault('nb_layer', 3)
         
         self.input_shape = params.setdefault('input_shape', (2000,16,1))
@@ -144,8 +144,8 @@ class Encoder():
             return
         
         conv = self.input_img
+        nb_filter = 4
         for i in range(self.nb_layer):
-            nb_filter = 4**(i+1)
             conv = build_functions._conv_bn_relu_pool(nb_filter = nb_filter,
                                                       is_first_layer = (i==0),
                                                       input_shape = self.input_shape,
@@ -156,7 +156,7 @@ class Encoder():
                                                       pool_size = self.pool_size,
                                                       pool_strides=self.pool_strides
                                                       )(conv)              
-                                        
+            nb_filter += 4
         model = Model(inputs=self.input_img, outputs=conv)
         self.model = model       
 
@@ -180,7 +180,7 @@ class BottleNeck():
             embedding = Dense(units=self.vector_len, name='embedding')(embedding)
             
             decoder = embedding
-            decoder = Dense(units=self._encoder_shape[1]*self._encoder_shape[2]*self._encoder_shape[3])(decoder)
+            decoder = Dense(units=(self._encoder_shape[1])*self._encoder_shape[2]*self._encoder_shape[3])(decoder)
             decoder = Reshape((self._encoder_shape[1], self._encoder_shape[2], self._encoder_shape[3]))(decoder)
             decoder = BatchNormalization()(decoder)
             decoder = act_function(input=decoder, selection=self.act_selection)
@@ -212,7 +212,7 @@ class Decoder():
 
         self.nb_layer = params.setdefault('nb_layer', 3)
         self.kernel_size = params.setdefault('kernel_size', (10,3))
-        self.strides = params.setdefault('strides', (1,1))
+        self.strides = params.setdefault('strides', (1,1)) # UPSAMPLE 일때는 convolution의 strides (1,1), DECONV 일떄는 Conv2DTranspose의 strides (2,2)
         self.padding = params.setdefault('padding', 'valid')
         self.act_selection = params.setdefault('act_selection', 'ReLU')
         self.pool_size = params.setdefault('pool_size', (2,2)) # for Upsampling
