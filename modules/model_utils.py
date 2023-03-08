@@ -108,7 +108,7 @@ def model_initiation(model, is_lr_reducer, learning_rate):
     return model
     
     
-def train_model(X_train, X_val, test_name, iter, is_lr_reducer, model, epochs, batch_size):  
+def train_model(X_train, test_name, iter, is_lr_reducer, model, epochs, batch_size, X_val=None):  
     # callback_1
     path_weights = '%s/results/%s/%d/weights.h5' % (temp_path, test_name, iter)
     checkpoint = ModelCheckpoint(path_weights, monitor='val_loss', save_best_only=True, verbose=False, mode='min')
@@ -120,14 +120,15 @@ def train_model(X_train, X_val, test_name, iter, is_lr_reducer, model, epochs, b
         callbacks.append(lr_reducer)
         
     # Start training
-    H = model.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=epochs, callbacks=callbacks, batch_size=batch_size)
+    # H = model.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=epochs, callbacks=callbacks, batch_size=batch_size)
+    H = model.fit(X_train, X_train, epochs=epochs, callbacks=callbacks, batch_size=batch_size)
     
     # Plot acc_loss_plot and Save the result
     plot_acc_loss(H=H, path_save='%s/results/%s/%d/acc_loss_plot.png' % (temp_path, test_name, iter), epochs=epochs, test_name=test_name)
     return model
 
 
-def eval_model(X_train, X_test, test_name, iter):    
+def eval_model(X_train, test_name, iter, X_test=None):    
     path_module, path_csv, path_scalogram = utils.append_default_path()
     model = load_model('%s/results/%s/%d/weights.h5' % (temp_path, test_name, iter))
     
@@ -137,7 +138,8 @@ def eval_model(X_train, X_test, test_name, iter):
         df = pd.read_excel(os.path.join(path_csv, 'results.xlsx'), sheet_name=test_name, index_col=0)
 
     # 1. test corr
-    X_test_pred = model.predict(X_test)
+    # X_test_pred = model.predict(X_test)
+    X_test_pred = model.predict(X_train)
     corr = custom_corr(X_test, X_test_pred)
     print("\ncorr of test set: {}".format(corr))
     mean_corr, median_corr, std_corr = get_corr_statistics(X_test, X_test_pred)
@@ -167,7 +169,7 @@ def plot_acc_loss(H, path_save, epochs, test_name):
     # MSE plot
     plt.subplot(1,num_subplot,1)
     plt.plot(np.arange(0, epochs), H.history["MSE"], label="train_mse")
-    plt.plot(np.arange(0, epochs), H.history["val_MSE"], label="val_mse")
+    # plt.plot(np.arange(0, epochs), H.history["val_MSE"], label="val_mse")
     plt.title('MSE_' + test_name, fontsize=20)
     plt.xlabel("Epoch #", fontsize=20)
     plt.ylabel("MSE", fontsize=20)
@@ -178,7 +180,7 @@ def plot_acc_loss(H, path_save, epochs, test_name):
     # corr plot
     plt.subplot(1,num_subplot,2)
     plt.plot(np.arange(0, epochs), H.history["corr_keras"], label="train_corr")
-    plt.plot(np.arange(0, epochs), H.history["val_corr_keras"], label="val_corr")
+    # plt.plot(np.arange(0, epochs), H.history["val_corr_keras"], label="val_corr")
     plt.title('corr_' + test_name, fontsize=20)
     plt.xlabel("Epoch #", fontsize=20)
     plt.ylabel("corr", fontsize=20)
